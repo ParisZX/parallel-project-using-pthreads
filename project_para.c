@@ -12,8 +12,8 @@
 #include <time.h>        
 #include <sys/time.h>
 
-#define NUM_OF_POINTS 100000 //2^24
-#define NUM_OF_THREADS 10000
+#define NUM_OF_POINTS 400000 //2^24
+#define NUM_OF_THREADS 16
 
 //structure with box info
 typedef struct Box {
@@ -42,7 +42,10 @@ int notAvailable=0;
 //mutex for number of threads
 pthread_mutex_t *threadNumMut;
 pthread_cond_t *canCheckThreads;
-int activeThreads=0,cantCheckThreads=0,sumOfThreadsUsed=0;
+int cantCheckThreads=0;
+
+int activeThreads=0;
+long sumOfThreadsUsed=0;
 
 //mutex for bCounter
 pthread_mutex_t *bCountMut;
@@ -56,11 +59,11 @@ void unlockActiveThreads();
 void lockBCounter();
 void unlockBCounter();
 
-Box** box; 	//array of all boxes
+Box** box; 		//array of all boxes
 //Box *leaf;	//array of non-null leaf boxes
 
 double A[NUM_OF_POINTS][3], B[NUM_OF_POINTS][3];
-long boxIdCounter,bCounter;
+long boxIdCounter, bCounter;
 
 int main() {
 
@@ -93,7 +96,94 @@ int main() {
 	// 		box[i]->center[2],box[i]->n);
 	
 	long finishing=getTimestamp();
-	printf("Total time: %lu\n",finishing-starting);
+	printf("Total time: %lu, threads used:%lu\n",finishing-starting,sumOfThreadsUsed);
+}
+
+void *runBoxParallel(void *arg) {
+
+	long i;
+	double *start,xLowerLim,xUpperLim,yLowerLim,yUpperLim,zLowerLim,zUpperLim;
+	Box *myBox=(Box *)arg; //typecasting the argument, which is the actual box
+	Box children[8];
+	pthread_t threads[8];
+	int isThread[8];
+
+	calculateLimitsAndFindPoints(myBox);
+	if(myBox->boxid%10000==0)	
+		printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
+			myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
+			myBox->center[2],myBox->n,activeThreads);
+	
+	if(myBox->n==0) {
+		lockActiveThreads();
+		activeThreads--;
+		unlockActiveThreads();
+		return 0;
+	}
+	else if(myBox->n<=20) {
+		lockActiveThreads();
+		activeThreads--;
+		unlockActiveThreads();
+		return 0;
+	}
+	else {
+		//create binary represantation of i, to find the centers of the 8 subboxes
+		int bin0,bin1,bin2;
+
+		for(i=0;i<8;i++) {
+			//here we need the exclusive access to boxIdCounter
+			lockBoxIdCounter();
+
+			boxIdCounter++;
+			bin0=i%2;
+			bin1=(i/2)%2;
+			bin2=i/4;
+			if(bin0==0) bin0=(-1);
+			if(bin1==0) bin1=(-1);
+			if(bin2==0) bin2=(-1);
+						
+			myBox->child[i]=boxIdCounter;
+			children[i].level=myBox->level+1;
+			children[i].boxid=boxIdCounter;
+			children[i].center[0]=myBox->center[0]+(1/pow(2,(myBox->level+1)))*bin0*0.5;
+			children[i].center[1]=myBox->center[1]+(1/pow(2,(myBox->level+1)))*bin1*0.5;
+			children[i].center[2]=myBox->center[2]+(1/pow(2,(myBox->level+1)))*bin2*0.5;
+			
+			box = (Box**) realloc(box,boxIdCounter*sizeof(Box*));
+			int tempCounter=boxIdCounter-1;
+			
+			box[tempCounter]=(Box*) malloc(sizeof(Box));
+			assignChildtoNewBox(tempCounter,children[i]);
+
+			//we are done with boxIdCounter
+			unlockBoxIdCounter();
+
+			lockActiveThreads();			
+			
+			if(activeThreads<NUM_OF_THREADS) {
+				activeThreads++;
+				sumOfThreadsUsed++;
+				unlockActiveThreads();
+				isThread[i]=1;
+				pthread_create(&threads[i], NULL, runBoxParallel,(void *)box[tempCounter]);
+			}
+			else{
+				unlockActiveThreads();
+				isThread[i]=0;
+				runBox(box[tempCounter]);
+			}
+		}
+
+		lockActiveThreads();
+		activeThreads--;
+		unlockActiveThreads();
+
+		for(i=0;i<8;i++) {
+			if(isThread[i]) {
+				pthread_join(threads[i],NULL);	
+			}
+		}
+	}
 }
 
 void *runBox(void *arg) {
@@ -102,15 +192,16 @@ void *runBox(void *arg) {
 	double *start,xLowerLim,xUpperLim,yLowerLim,yUpperLim,zLowerLim,zUpperLim;
 	Box *myBox=(Box *)arg; //typecasting the argument, which is the actual box
 	Box children[8];
+	pthread_t threads[8];
+	int isThread[8];
 
 	calculateLimitsAndFindPoints(myBox);
 	if(myBox->boxid%10000==0)	
-		printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
+		printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
 			myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
-			myBox->center[2],myBox->n);
+			myBox->center[2],myBox->n,activeThreads);
 	
 	if(myBox->n==0) {
-		myBox->boxid=0;
 		return 0;
 	}
 	else if(myBox->n<=20) {
@@ -141,14 +232,34 @@ void *runBox(void *arg) {
 			
 			box = (Box**) realloc(box,boxIdCounter*sizeof(Box*));
 			int tempCounter=boxIdCounter-1;
-			//we are done with boxIdCounter
-			unlockBoxIdCounter();			
-
+			
 			box[tempCounter]=(Box*) malloc(sizeof(Box));
 			assignChildtoNewBox(tempCounter,children[i]);
-			runBox(box[tempCounter]);
+
+			//we are done with boxIdCounter
+			unlockBoxIdCounter();
+
+			lockActiveThreads();			
+			
+			if(activeThreads<NUM_OF_THREADS) {
+				activeThreads++;
+				sumOfThreadsUsed++;
+				unlockActiveThreads();
+				isThread[i]=1;
+				pthread_create(&threads[i], NULL, runBoxParallel,(void *)box[tempCounter]);
+			}
+			else{
+				unlockActiveThreads();
+				isThread[i]=0;
+				runBox(box[tempCounter]);
+			}
 		}
 
+		for(i=0;i<8;i++) {
+			if(isThread[i]) {
+				pthread_join(threads[i],NULL);	
+			}
+		}
 	}
 }
 
