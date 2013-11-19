@@ -19,12 +19,6 @@ typedef struct Box {
  	float center[3];
 }Box;
 
-//the return struct of 0<n<=8
-typedef struct returnSt {
-	int level, n;
-	double *start; //starting address of points in B for that particular box
-}returnSt;
-
 //helpful functions
 void calculatePoints();
 int calculateLimitsAndFindPoints(Box *myBox);
@@ -51,7 +45,7 @@ Box** box; 	//array of all boxes
 //Box *leaf;	//array of non-null leaf boxes
 
 double A[NUM_OF_POINTS][3], B[NUM_OF_POINTS][3];
-int boxIdCounter;
+int boxIdCounter,bCounter;
 
 int main() {
 
@@ -61,21 +55,21 @@ int main() {
 	calculatePoints();
 	
 	//allocate memory for first box
-	box = (Box**) malloc(1*sizeof(Box*));  
-	box[0] = (Box*) malloc(1*sizeof(Box));
+	box = (Box**) malloc(sizeof(Box*));  
+	box[0] = (Box*) malloc(sizeof(Box));
 
 	//init first box
 	initFirstBox();
 	
-	boxIdCounter=1;
+	boxIdCounter=1; bCounter=0;
 
 	runBox(box[0]);
 	
-	printf("\n=======================================\n\n");
-	for(i=0;i<boxIdCounter;i++)
-	printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
-			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
-			box[i]->center[2],box[i]->n);
+	// printf("\n=======================================\n\n");
+	// for(i=0;i<boxIdCounter;i++)
+	// printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
+	// 		box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
+	// 		box[i]->center[2],box[i]->n);
 }
 
 void *runBox(void *arg) {
@@ -85,14 +79,14 @@ void *runBox(void *arg) {
 	Box *myBox=(Box *)arg; //typecasting the argument, which is the actual box
 	Box children[8];
 
-	myBox->n=calculateLimitsAndFindPoints(myBox);
-		
-	printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
+	calculateLimitsAndFindPoints(myBox);
+	//if(myBox->boxid%1000==0)	
+		printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
 			myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
 			myBox->center[2],myBox->n);
 	
 	if(myBox->n==0) {
-		//myBox->boxid=0;
+		myBox->boxid=0;
 		return 0;
 	}
 	else if(myBox->n<=20) {
@@ -119,7 +113,7 @@ void *runBox(void *arg) {
 			children[i].center[2]=myBox->center[2]+(1/pow(2,(myBox->level+1)))*bin2*0.5;
 			
 			box = (Box**) realloc(box,boxIdCounter*sizeof(Box*));
-			box[boxIdCounter-1]=(Box*) malloc(1*sizeof(Box));
+			box[boxIdCounter-1]=(Box*) malloc(sizeof(Box));
 			
 			assignChildtoNewBox(boxIdCounter-1,children[i]);
 			
@@ -160,8 +154,9 @@ void calculatePoints() {
 }
 
 int calculateLimitsAndFindPoints(Box *myBox) {
-	int n=0;
+	myBox->n=0;
 	long i;
+	double tempArray[20][3];
 	double xll=(myBox->center[0]-(1/pow(2,(myBox->level+1))));
 	double xul=(myBox->center[0]+(1/pow(2,(myBox->level+1))));
 	double yll=(myBox->center[1]-(1/pow(2,(myBox->level+1))));
@@ -170,15 +165,29 @@ int calculateLimitsAndFindPoints(Box *myBox) {
 	double zul=(myBox->center[2]+(1/pow(2,(myBox->level+1))));
 	
 	for(i=0;i<NUM_OF_POINTS;i++) {
-			//evaluate if point is in the limits of the box
-			if((A[i][0]>=xll)&&(A[i][0]<xul)
-				&&(A[i][1]>=yll)&&(A[i][1]<yul)
-				&&(A[i][2]>=zll)&&(A[i][2]<zul)) {
-				n++; //increment the number of points
+		//evaluate if point is in the limits of the box
+		if((A[i][0]>=xll)&&(A[i][0]<xul)
+			&&(A[i][1]>=yll)&&(A[i][1]<yul)
+			&&(A[i][2]>=zll)&&(A[i][2]<zul)) {
+			if(myBox->n<20) {
+				tempArray[myBox->n][0]=A[i][0];
+				tempArray[myBox->n][1]=A[i][1];
+				tempArray[myBox->n][2]=A[i][2];
 			}
+		myBox->n++; //increment the number of points
 		}
-
-	return n;
+	}
+	if(myBox->n>0&&myBox->n<=20) {
+		myBox->start=bCounter;
+		printf("n=%i so fill B array from bCounter=%i\n",myBox->n,bCounter);
+		for(i=0;i<myBox->n;i++) {
+		 	B[bCounter][0]=tempArray[i][0];
+			B[bCounter][1]=tempArray[i][1];
+			B[bCounter][2]=tempArray[i][2];
+			printf("B[%i]=%G,%G,%G\n",bCounter,B[bCounter][0],B[bCounter][1],B[bCounter][2]);
+			bCounter++;
+		}
+	}
 }
 
 void initFirstBox() {
