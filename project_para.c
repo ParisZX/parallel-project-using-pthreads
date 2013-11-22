@@ -12,8 +12,8 @@
 #include <time.h>        
 #include <sys/time.h>
 
-#define NUM_OF_POINTS 400000 //2^24
-#define NUM_OF_THREADS 16
+#define NUM_OF_POINTS 200000 //2^24
+#define NUM_OF_THREADS 32
 
 //structure with box info
 typedef struct Box {
@@ -33,6 +33,7 @@ long getTimestamp();
 
 //the function that does all the work
 void *runBox(void *arg);
+void *runBoxParallel(void *arg);
 
 //mutex for number of boxes
 pthread_mutex_t *boxNumMut;
@@ -89,11 +90,12 @@ int main() {
 
 	runBox(box[0]);
 	
-	// printf("\n=======================================\n\n");
-	// for(i=0;i<boxIdCounter;i++)
-	// printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
-	// 		box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
-	// 		box[i]->center[2],box[i]->n);
+	printf("\n=======================================\n\n");
+	for(i=0;i<boxIdCounter;i++)
+	if(box[i]->boxid%1000==0)	
+		printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
+			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
+			box[i]->center[2],box[i]->n);
 	
 	long finishing=getTimestamp();
 	printf("Total time: %lu, threads used:%lu\n",finishing-starting,sumOfThreadsUsed);
@@ -102,17 +104,17 @@ int main() {
 void *runBoxParallel(void *arg) {
 
 	long i;
-	double *start,xLowerLim,xUpperLim,yLowerLim,yUpperLim,zLowerLim,zUpperLim;
+	
 	Box *myBox=(Box *)arg; //typecasting the argument, which is the actual box
 	Box children[8];
 	pthread_t threads[8];
 	int isThread[8];
 
 	calculateLimitsAndFindPoints(myBox);
-	if(myBox->boxid%10000==0)	
-		printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
-			myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
-			myBox->center[2],myBox->n,activeThreads);
+	// if(myBox->boxid%10000==0)	
+	// 	printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
+	// 		myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
+	// 		myBox->center[2],myBox->n,activeThreads);
 	
 	if(myBox->n==0) {
 		lockActiveThreads();
@@ -189,17 +191,17 @@ void *runBoxParallel(void *arg) {
 void *runBox(void *arg) {
 
 	long i;
-	double *start,xLowerLim,xUpperLim,yLowerLim,yUpperLim,zLowerLim,zUpperLim;
+	
 	Box *myBox=(Box *)arg; //typecasting the argument, which is the actual box
 	Box children[8];
 	pthread_t threads[8];
 	int isThread[8];
 
 	calculateLimitsAndFindPoints(myBox);
-	if(myBox->boxid%10000==0)	
-		printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
-			myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
-			myBox->center[2],myBox->n,activeThreads);
+	//if(myBox->boxid%10000==0)	
+		// printf("Box %i: level=%i, center=%G,%G,%G, n=%i, active threads=%i\n",
+		// 	myBox->boxid,myBox->level,myBox->center[0],myBox->center[1],
+		// 	myBox->center[2],myBox->n,activeThreads);
 	
 	if(myBox->n==0) {
 		return 0;
