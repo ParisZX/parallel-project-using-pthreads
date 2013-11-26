@@ -12,8 +12,8 @@
 #include <time.h>        
 #include <sys/time.h>
 
-#define NUM_OF_POINTS 1000 //2^24
-#define NUM_OF_THREADS 16
+#define NUM_OF_POINTS 16000000 //2^24
+#define NUM_OF_THREADS 8
 
 //structure with box info
 typedef struct Box {
@@ -29,16 +29,20 @@ long *parents,*newParents,nOfChild[8]; //parents array will be keeping the ids o
 //variables who act as pointers for the threads
 long numOfParents,parent,bCounter,numOfNewParents,boxIdCounter;
 
+//struct for timestamps
+struct timeval startwtime, endwtime; 
 
 //functions
 void allocateMemForFirstBox();
 void allocateMemForTempArray();
+void freeMemForTempArray();
 void initFirstBox();
 void calculatePoints();
 void calculateLimits();
 void map();
 void reduce();
 void initChildren();
+long getTimestamp();
 
 int main() {
 	int done=0,j; long i;
@@ -50,16 +54,20 @@ int main() {
 	
 	boxIdCounter=9; 
 
+	//get first timestamp
+	long starting=getTimestamp();
+
 	while(!done) {
 		numOfNewParents=0;	
 		for(i=0;i<numOfParents;i++) {
 			allocateMemForTempArray();
 			parent=parents[i]-1; //"parents" array keeps the ids of the parents, we need the pointers, which are id-1 
-			printf("Parent=%lu\n",parent);
+			//printf("Parent=%lu\n",parent);
 			calculateLimits();
 			//printf("59\n");
 			map();
 			reduce();
+			freeMemForTempArray();
 		}
 		if(numOfNewParents==0)
 			break;
@@ -68,27 +76,25 @@ int main() {
 			parents[i]=newParents[i];
 		}
 		numOfParents=numOfNewParents;
-		printf("\n=======================================\n\n");
-		printf("numOfParents=%lu\n",numOfParents);
-		for(i=0;i<boxIdCounter;i++)
-		//if(box[i]->boxid%1000==0)
-			printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
-			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
-			box[i]->center[2],box[i]->n);
 	}
+
+	long finishing=getTimestamp();
+	
 	printf("\n=======================================\n\n");
 	for(i=0;i<boxIdCounter;i++)
-		//if(box[i]->boxid%1000==0)
+		if(box[i]->boxid%10000==0)
 			printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
 			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
 			box[i]->center[2],box[i]->n);
+
+	printf("Total time: %lu\n",finishing-starting);
 }
 
 void map() {
 	//printf("im in map\n");
 	long i,childsId,start,finish; int j;
 	start=box[parent]->start; finish=box[parent]->start+box[parent]->n;
-	printf("start...finish %lu....%lu, in boxes: %G %G %G , %G %G %G\n",start,finish-1,B[start][0],B[start][1],B[start][2],B[finish-1][0],B[finish-1][1],B[finish-1][2]);
+	//printf("start...finish %lu....%lu, in boxes: %G %G %G , %G %G %G\n",start,finish-1,B[start][0],B[start][1],B[start][2],B[finish-1][0],B[finish-1][1],B[finish-1][2]);
 	for(i=start;i<finish;i++) {
 		//check which child each point belongs to
 		for(j=0;j<8;j++) {
@@ -97,13 +103,11 @@ void map() {
 				(B[i][1]>=box[childsId]->limits[1][0])&&(B[i][1]<box[childsId]->limits[1][1])&&
 				(B[i][2]>=box[childsId]->limits[2][0])&&(B[i][2]<box[childsId]->limits[2][1])) {
 				
-				pointsOfChild[j]=(double**)realloc(pointsOfChild[j],(box[childsId]->n+2)*sizeof(double*));
+				pointsOfChild[j]=(double**)realloc(pointsOfChild[j],(box[childsId]->n+1)*sizeof(double*));
 				pointsOfChild[j][box[childsId]->n]=(double*)malloc(3*sizeof(double));
 				pointsOfChild[j][box[childsId]->n][0]=B[i][0];
 				pointsOfChild[j][box[childsId]->n][1]=B[i][1];
 				pointsOfChild[j][box[childsId]->n][2]=B[i][2];
-				pointsOfChild[j][box[childsId]->n+1]=(double*)malloc(3*sizeof(double));
-				pointsOfChild[j][box[childsId]->n+1][0]=-1;
 			
 				box[childsId]->n++; //inc the childs n	
 			}
@@ -131,8 +135,6 @@ void reduce() {
 		//do all the things u need to do with B array,
 		//and change bCounter.
 			for(j=0;j<box[childsId]->n;j++) {
-				if(pointsOfChild[i][j][0]==-1)
-					break;
 				B[bCounter][0]=pointsOfChild[i][j][0];
 				B[bCounter][1]=pointsOfChild[i][j][1];
 				B[bCounter][2]=pointsOfChild[i][j][2];
@@ -146,7 +148,7 @@ void reduce() {
 		childsId=box[parent]->child[i]-1;
 		
 		if(box[childsId]->n>20) {
-			printf("for Box %lu bCounter=%lu\n",childsId+1,bCounter);
+			//printf("for Box %lu bCounter=%lu\n",childsId+1,bCounter);
 			//child is gonna be parent. Do B changes.
 			box[childsId]->start=bCounter;
 			initChildren(childsId);
@@ -155,11 +157,7 @@ void reduce() {
 			newParents=(long*)realloc(newParents,(numOfNewParents+1)*sizeof(long));
 			for(j=0;j<box[childsId]->n;j++) {
 				//printf("%lu\n",j);
-				if(pointsOfChild[i][j][0]==-1) {
-					printf("\nbroken\n");
-					break;
-				}
-				printf("pointsOfChild[%i][%lu]=%G %G %G\n",i,j,pointsOfChild[i][j][0],pointsOfChild[i][j][1],pointsOfChild[i][j][2]);
+				//printf("pointsOfChild[%i][%lu]=%G %G %G\n",i,j,pointsOfChild[i][j][0],pointsOfChild[i][j][1],pointsOfChild[i][j][2]);
 				B[bCounter][0]=pointsOfChild[i][j][0];
 				B[bCounter][1]=pointsOfChild[i][j][1];
 				B[bCounter][2]=pointsOfChild[i][j][2];
@@ -236,6 +234,22 @@ void allocateMemForTempArray() {
 	//printf("223\n");
 }
 
+
+void freeMemForTempArray() {
+	int k; long i,j,childsId;
+	//printf("217\n");
+	for(i=0;i<8;i++) {
+		childsId=box[parent]->child[i]-1;
+		for(j=0;j<box[childsId]->n;j++) {
+			//for(k=0;k<3;k++)
+				//free(pointsOfChild[i][j][k]);
+			free(pointsOfChild[i][j]);
+		}
+		free(pointsOfChild[i]);
+	}
+	//printf("223\n");
+}
+
 void initFirstBox() {
 	int i;
 
@@ -298,4 +312,12 @@ void calculateLimits() {
 		//z upper lim
 		box[childsId]->limits[2][1]=(box[childsId]->center[2]+(1/pow(2,(box[childsId]->level+1))));
 	}	
+}
+
+long getTimestamp(){
+
+  gettimeofday(&endwtime, NULL);
+
+  return((double)((endwtime.tv_usec - startwtime.tv_usec)/1.0e6
+                  + endwtime.tv_sec - startwtime.tv_sec)*1000);
 }
