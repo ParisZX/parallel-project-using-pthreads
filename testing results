@@ -1,0 +1,12 @@
+map_reduce 
+	for 50  000 points:   2.892 sec , last box: 14337
+	for 100 000 points:  13.292 sec
+	for 300 000 points: 228.018 sec
+
+
+
+
+para
+	for 50  000 points:   3.731 sec , last box: 14337
+	for 100 000 points:  15.036 sec
+	for 300 000 points: 138.650 sec
