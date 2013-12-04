@@ -23,49 +23,37 @@ typedef struct Box {
 
 //variables and arrays
 Box** box;
-double A[NUM_OF_POINTS][3], B[NUM_OF_POINTS][3], ***pointsOfChild;
+double A[NUM_OF_POINTS][4], B[NUM_OF_POINTS][3], ***pointsOfChild;
 long *parents,*newParents,nOfChild[8]; //parents array will be keeping the ids of boxes who are parents
 
 //variables who act as pointers for the threads
-long numOfParents,parent,bCounter,numOfNewParents,boxIdCounter;
+long numOfParents,numOfNewParents,boxIdCounter;
 
 //struct for timestamps
 struct timeval startwtime, endwtime; 
 
-//mutex for bCounter
-pthread_mutex_t *bCountMut;
-pthread_cond_t *canChangeBCount;
-int cantChangeBCount=0;
-
 //functions
-void initMutAndCond();
 void allocateMemForFirstBox();
 void allocateMemForTempArray();
 void freeMemForTempArray();
 void initFirstBox();
 void calculatePoints();
 void calculateLimits();
-void *map(void *arg);
+void map();
+void reduce();
 void findColleagues(long childsId);
-void lockBCounter();
-void unlockBCounter();
 void initChildren();
 long getTimestamp();
 
 int main() {
-	int done=0,j; long i;
-
-	initMutAndCond();
-
+	int done=0,j; long i,rank[1024]; pthread_t threads[1024];
 	calculatePoints();
 
 	numOfParents=1;	parents=(long*)malloc(sizeof(long)); newParents=(long*)malloc(sizeof(long));
-	//2521067531
+	
 	allocateMemForFirstBox();
 	
 	boxIdCounter=9; 
-	
-	pthread_t threads[NUM_OF_THREADS]; int threadId[NUM_OF_THREADS];
 
 	//get first timestamp
 	long starting=getTimestamp();
@@ -74,21 +62,8 @@ int main() {
 		tempTime=getTimestamp();
 		numOfNewParents=0;	
 		for(i=0;i<numOfParents;i++) {
-			allocateMemForTempArray();
-
-			parent=parents[i]-1; //"parents" array keeps the ids of the parents, we need the pointers, which are id-1 
-			//printf("Parent=%lu\n",parent);
-			calculateLimits();
-			//printf("59\n");
-			bCounter=box[parent]->start;
-			for(j=0;j<8;j++) {
-				threadId[j]=j;
-				pthread_create(&threads[j], NULL, map, &threadId[j]);	
-			}
-			for(j=0;j<8;j++) 
-				pthread_join(threads[j], NULL);
-			
-			freeMemForTempArray();
+			rank[i]=i;
+			pthread_create(&threads[i], NULL, all, &rank[i]);
 		}
 		if(numOfNewParents==0)
 			break;
@@ -97,7 +72,7 @@ int main() {
 			parents[i]=newParents[i];
 		}
 		numOfParents=numOfNewParents;
-		printf("Time for lvl %i: %lu\n",level,getTimestamp()-tempTime);
+		printf("Time for lvl %i: %lu, num of new parents: %lu\n",level,getTimestamp()-tempTime,numOfNewParents);
 		level++;
 	}
 
@@ -105,110 +80,106 @@ int main() {
 	
 	printf("\n=======================================\n\n");
 	for(i=0;i<boxIdCounter;i++) {
-		//if(box[i]->boxid%10000==0) {
+		if(box[i]->boxid%10000==0) {
 			printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
 			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
 			box[i]->center[2],box[i]->n);
-			// for(j=7;j<26;j++)
-			// 	if(box[i]->colleague[j]>=0)
-			// 		printf("colleague %i = %i\n",j,box[i]->colleague[j]);
-		//}
+
+			for(j=7;j<26;j++)
+				if(box[i]->colleague[j]>=0)
+					printf("colleague %i = %i\n",j,box[i]->colleague[j]);
+		}
+
 	}
+	
+
 	printf("Total time: %lu\n",finishing-starting);
 }
 
-void *map(void *arg) {
-	long i,j;
+void *all(void *arg){
+	int *rankAddr=(int *)arg, rank=*rankAddr;
+	allocateMemForTempArray();
+	long parent=parents[rank]-1; //"parents" array keeps the ids of the parents, we need the pointers, which are id-1 
+	//printf("Parent=%lu\n",parent);
+	calculateLimits(parent);
+	//printf("59\n");
+	map(parent);
+	reduce(parent);
+	freeMemForTempArray(parent);
+}
 
-	int *threadIdAddr=(int *)arg, threadId=*threadIdAddr;
-	
-	long childsId; j=threadId; childsId=box[parent]->child[j]-1;
-
-	long start,finish;
+void map(long parent) {
+	//printf("im in map\n");
+	long i,childsId,start,finish; int j;
 	start=box[parent]->start; finish=box[parent]->start+box[parent]->n;
-	
+	//printf("start...finish %lu....%lu, in boxes: %G %G %G , %G %G %G\n",start,finish-1,B[start][0],B[start][1],B[start][2],B[finish-1][0],B[finish-1][1],B[finish-1][2]);
 	for(i=start;i<finish;i++) {
-		
-		if( (B[i][0]>=box[childsId]->limits[0][0])&&(B[i][0]<box[childsId]->limits[0][1])&&
-			(B[i][1]>=box[childsId]->limits[1][0])&&(B[i][1]<box[childsId]->limits[1][1])&&
-			(B[i][2]>=box[childsId]->limits[2][0])&&(B[i][2]<box[childsId]->limits[2][1])) {
+		//check which child each point belongs to
+		for(j=0;j<8;j++) {
+			childsId=box[parent]->child[j]-1;
+			if( (B[i][0]>=box[childsId]->limits[0][0])&&(B[i][0]<box[childsId]->limits[0][1])&&
+				(B[i][1]>=box[childsId]->limits[1][0])&&(B[i][1]<box[childsId]->limits[1][1])&&
+				(B[i][2]>=box[childsId]->limits[2][0])&&(B[i][2]<box[childsId]->limits[2][1])) {
+				
+				pointsOfChild[j]=(double**)realloc(pointsOfChild[j],(box[childsId]->n+1)*sizeof(double*));
+				pointsOfChild[j][box[childsId]->n]=(double*)malloc(3*sizeof(double));
+				pointsOfChild[j][box[childsId]->n][0]=B[i][0];
+				pointsOfChild[j][box[childsId]->n][1]=B[i][1];
+				pointsOfChild[j][box[childsId]->n][2]=B[i][2];
 			
-			pointsOfChild[j]=(double**)realloc(pointsOfChild[j],(box[childsId]->n+1)*sizeof(double*));
-			pointsOfChild[j][box[childsId]->n]=(double*)malloc(3*sizeof(double));
-			pointsOfChild[j][box[childsId]->n][0]=B[i][0];
-			pointsOfChild[j][box[childsId]->n][1]=B[i][1];
-			pointsOfChild[j][box[childsId]->n][2]=B[i][2];
-		
-			box[childsId]->n++; //inc the childs n	
-
+				box[childsId]->n++; //inc the childs n
+				break;	
+			}
 		}
 	}
+}
+
+void reduce() {
+	//printf("im in reduce\n");
+	long childsId;
+	int i;
+	long j;
+
+	long bCounter=box[parent]->start;
+
+	for(i=0;i<8;i++) {
+		
+		childsId=box[parent]->child[i]-1;
 
 		if(box[childsId]->n==0) {
 			//child[i].boxid=0;
 			printf("");
 		}
-		
 		if(box[childsId]->n<=20) {
 		//do all the things u need to do with B array,
 		//and change bCounter.
-			lockBCounter();
-			for(i=0;i<box[childsId]->n;i++) {
-				B[bCounter][0]=pointsOfChild[j][i][0];
-				B[bCounter][1]=pointsOfChild[j][i][1];
-				B[bCounter][2]=pointsOfChild[j][i][2];
+			for(j=0;j<box[childsId]->n;j++) {
+				B[bCounter][0]=pointsOfChild[i][j][0];
+				B[bCounter][1]=pointsOfChild[i][j][1];
+				B[bCounter][2]=pointsOfChild[i][j][2];
 				bCounter++;
-			}
-			unlockBCounter();			
+			}			
 		}
-		
 		if(box[childsId]->n>20) {
 			//printf("for Box %lu bCounter=%lu\n",childsId+1,bCounter);
 			//child is gonna be parent. Do B changes.
-			lockBCounter();
 			box[childsId]->start=bCounter;
-			long newParentId=childsId;
-			int k,bin0,bin1,bin2;
-
-			box = (Box**) realloc(box,(boxIdCounter+8)*sizeof(Box*));
-			for(k=0;k<8;k++) {
-				bin0=i%2;
-				bin1=(i/2)%2;
-				bin2=i/4;
-
-				if(bin0==0) bin0=(-1);
-				if(bin1==0) bin1=(-1);
-				if(bin2==0) bin2=(-1);
-
-				box[newParentId]->child[i]=boxIdCounter+1;
-				box[boxIdCounter]=(Box*)malloc(sizeof(Box));
-				box[boxIdCounter]->boxid=boxIdCounter+1;
-				//printf("for Box[%lu] child %i = %i\n",newParentId,i,box[newParentId]->child[i]);
-				box[boxIdCounter]->level=box[newParentId]->level+1;
-				box[boxIdCounter]->n=0;
-				box[boxIdCounter]->parent=newParentId+1;
-				box[boxIdCounter]->center[0]=box[newParentId]->center[0]+(1/pow(2,(box[newParentId]->level+1)))*bin0*0.5;
-				box[boxIdCounter]->center[1]=box[newParentId]->center[1]+(1/pow(2,(box[newParentId]->level+1)))*bin1*0.5;
-				box[boxIdCounter]->center[2]=box[newParentId]->center[2]+(1/pow(2,(box[newParentId]->level+1)))*bin2*0.5;
-				boxIdCounter++;
-			}
+			initChildren(childsId);
 			newParents[numOfNewParents]=childsId+1;
 			numOfNewParents++;
 			newParents=(long*)realloc(newParents,(numOfNewParents+1)*sizeof(long));
-
-			for(i=0;i<box[childsId]->n;i++) {
-				//printf("%lu\n",i);
-				//printf("pointsOfChild[%lu][%lu]=%G %G %G\n",i,j,pointsOfChild[i][j][0],pointsOfChild[i][j][1],pointsOfChild[i][j][2]);
-				B[bCounter][0]=pointsOfChild[j][i][0];
-				B[bCounter][1]=pointsOfChild[j][i][1];
-				B[bCounter][2]=pointsOfChild[j][i][2];
+			for(j=0;j<box[childsId]->n;j++) {
+				//printf("%lu\n",j);
+				//printf("pointsOfChild[%i][%lu]=%G %G %G\n",i,j,pointsOfChild[i][j][0],pointsOfChild[i][j][1],pointsOfChild[i][j][2]);
+				B[bCounter][0]=pointsOfChild[i][j][0];
+				B[bCounter][1]=pointsOfChild[i][j][1];
+				B[bCounter][2]=pointsOfChild[i][j][2];
 				bCounter++;
 			}
-			unlockBCounter();
 		}
-		//findColleagues(childsId);
-
-}		
+		findColleagues(childsId);
+	}
+}
 
 void findColleagues(long childsId) {
 	int j,k,colleagues=0,parentsColleague,colleaguesChild;
@@ -248,6 +219,33 @@ void findColleagues(long childsId) {
 
 }
 
+void allocateMemForFirstBox() {
+	int i,j,bin0,bin1,bin2;
+
+	box = (Box**) malloc(9*sizeof(Box*));  
+	box[0] = (Box*) malloc(sizeof(Box));
+	initFirstBox();
+
+	for(i=1;i<9;i++) {
+		bin0=(i-1)%2;
+		bin1=((i-1)/2)%2;
+		bin2=(i-1)/4;
+
+		if(bin0==0) bin0=(-1);
+		if(bin1==0) bin1=(-1);
+		if(bin2==0) bin2=(-1);
+
+		box[i]=(Box*)malloc(sizeof(Box));
+		box[i]->boxid=i+1;
+		box[i]->level=1;
+		box[i]->n=0;
+		box[i]->parent=1;
+		box[i]->center[0]=box[0]->center[0]+(1/pow(2,(box[0]->level+1)))*bin0*0.5;
+		box[i]->center[1]=box[0]->center[1]+(1/pow(2,(box[0]->level+1)))*bin1*0.5;
+		box[i]->center[2]=box[0]->center[2]+(1/pow(2,(box[0]->level+1)))*bin2*0.5;
+	}
+}
+
 void initChildren(long newParentId) { 
 	int i,bin0,bin1,bin2;
 
@@ -275,33 +273,6 @@ void initChildren(long newParentId) {
 	}
 }
 
-void allocateMemForFirstBox() {
-	int i,bin0,bin1,bin2;
-
-	box = (Box**) malloc(9*sizeof(Box*));  
-	box[0] = (Box*) malloc(sizeof(Box));
-	initFirstBox();
-
-	for(i=1;i<9;i++) {
-		bin0=(i-1)%2;
-		bin1=((i-1)/2)%2;
-		bin2=(i-1)/4;
-
-		if(bin0==0) bin0=(-1);
-		if(bin1==0) bin1=(-1);
-		if(bin2==0) bin2=(-1);
-
-		box[i]=(Box*)malloc(sizeof(Box));
-		box[i]->boxid=i+1;
-		box[i]->level=1;
-		box[i]->n=0;
-		box[i]->parent=1;
-		box[i]->center[0]=box[0]->center[0]+(1/pow(2,(box[0]->level+1)))*bin0*0.5;
-		box[i]->center[1]=box[0]->center[1]+(1/pow(2,(box[0]->level+1)))*bin1*0.5;
-		box[i]->center[2]=box[0]->center[2]+(1/pow(2,(box[0]->level+1)))*bin2*0.5;
-	}
-}
-
 void allocateMemForTempArray() {
 	//printf("im in allocateMemForTempArray\n");
 	int j;
@@ -310,7 +281,7 @@ void allocateMemForTempArray() {
 	for(j=0;j<8;j++) {
 		pointsOfChild[j]=(double**)malloc(sizeof(double*));
 		pointsOfChild[j][0]=(double*)malloc(3*sizeof(double));
-		pointsOfChild[j][0][0]=-1;
+		//pointsOfChild[j][0][0]=-1;
 	}
 	//printf("223\n");
 }
@@ -345,6 +316,7 @@ void initFirstBox() {
 		box[0]->child[i]=i+2;
 	for(i=0;i<26;i++)
 		box[0]->colleague[i]=-1;
+
 	parents[0]=1;
 }
 
@@ -370,13 +342,12 @@ void calculatePoints() {
 		zsqr= 1-xsqr-ysqr;
 		z=sqrt(zsqr);
 		
-		A[i][0]=x; A[i][1]=y; A[i][2]=z;
 		B[i][0]=x; B[i][1]=y; B[i][2]=z;
 		
 	}
 }
 
-void calculateLimits() {
+void calculateLimits(long parent) {
 	//printf("Parent=%lu\n",parent);
 	long i,childsId;
 	for(i=0;i<8;i++) {
@@ -395,29 +366,6 @@ void calculateLimits() {
 		//z upper lim
 		box[childsId]->limits[2][1]=(box[childsId]->center[2]+(1/pow(2,(box[childsId]->level+1))));
 	}	
-}
-
-void initMutAndCond() {
-	
-	bCountMut = (pthread_mutex_t *) malloc (sizeof (pthread_mutex_t));
-	pthread_mutex_init(bCountMut, NULL);
-
-	//init condition variables
-	canChangeBCount = (pthread_cond_t *) malloc (sizeof (pthread_cond_t));
-  	pthread_cond_init (canChangeBCount, NULL);
-}
-
-void lockBCounter() {
-	pthread_mutex_lock(bCountMut);
-	while(cantChangeBCount)
-		pthread_cond_wait(canChangeBCount,bCountMut);
-	cantChangeBCount=1;	
-}
-
-void unlockBCounter() {
-	cantChangeBCount=0;
-	pthread_mutex_unlock(bCountMut);
-	pthread_cond_signal(canChangeBCount);
 }
 
 long getTimestamp(){

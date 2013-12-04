@@ -1,10 +1,60 @@
+map_reduce_v2 serial
+	
+	for 5M points: 15.047 sec
+	
+map_reduce_v2
+	
+	for 5M points: 65.094 sec
+
+
+16777216
+parall
+Time for lvl 0: 4926
+Time for lvl 1: 9300
+Time for lvl 2: 9145
+Time for lvl 3: 9448
+Time for lvl 4: 9994
+Time for lvl 5: 10702
+Time for lvl 6: 12950
+
+ser
+Time for lvl 0: 3678, num of new parents: 7
+Time for lvl 1: 8273, num of new parents: 34
+Time for lvl 2: 6538, num of new parents: 145
+Time for lvl 3: 5557, num of new parents: 595
+Time for lvl 4: 5365, num of new parents: 2360
+Time for lvl 5: 4205, num of new parents: 9055
+Time for lvl 6: 4194, num of new parents: 33176
+Time for lvl 7: 5452, num of new parents: 107843
+Time for lvl 8: 8805, num of new parents: 257473
+Time for lvl 9: 11166, num of new parents: 219643
+Time for lvl 10: 5006, num of new parents: 12
+
+
+parall
+Time for lvl 0: 5769
+Time for lvl 1: 8047
+Time for lvl 2: 9673
+Time for lvl 3: 10059
+Time for lvl 4: 10189
+Time for lvl 5: 11020
+Time for lvl 6: 13500
+Time for lvl 7: 19532
+Time for lvl 8: 10452
+Time for lvl 9: 13315
+Time for lvl 10: 5691
+
+
+
+
+
+=====================================================
+OLDER TESTS
+=====================================================
 map_reduce 
 	for 50  000 points:   2.892 sec , last box: 14337
 	for 100 000 points:  13.292 sec
 	for 300 000 points: 228.018 sec
-
-
-
 
 para
 	for 50  000 points:   3.731 sec , last box: 14337
