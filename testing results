@@ -60,3 +60,10 @@ para
 	for 50  000 points:   3.731 sec , last box: 14337
 	for 100 000 points:  15.036 sec
 	for 300 000 points: 138.650 sec
+
+openmp 
+2^20 	Total time: 9708  		number of boxes: 314593
+2^21 	Total time: 22045 		number of boxes: 580913
+2^22 	Total time: 44714 , 	number of boxes: 1260889
+2^23 	Total time: 93904 , 	number of boxes: 2322937
+2^24    Total time: 192808 , 	number of boxes: 5042753

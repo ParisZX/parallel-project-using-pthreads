@@ -12,7 +12,7 @@
 #include <time.h>        
 #include <sys/time.h>
 
-#define NUM_OF_POINTS 1000 //2^24
+#define NUM_OF_POINTS 16777216 //2^24
 
 //structure with box info
 typedef struct Box {
@@ -56,6 +56,7 @@ int main() {
 
 	//get first timestamp
 	long starting=getTimestamp();
+
 	long tempTime; int level=0;
 	while(!done) {
 		tempTime=getTimestamp();
@@ -86,12 +87,12 @@ int main() {
 	
 	printf("\n=======================================\n\n");
 	for(i=0;i<boxIdCounter;i++) 
-		//if(box[i]->boxid%10000==0) 
+		if(box[i]->boxid%10000==0) 
 			printf("Box %i: level=%i, center=%G,%G,%G, n=%i\n",
 			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
 			box[i]->center[2],box[i]->n);
 
-	printf("Total time: %lu\n",finishing-starting);
+	printf("Total time: %lu , number of boxes: %lu\n",finishing-starting,boxIdCounter);
 }
 
 void map() {
@@ -123,7 +124,6 @@ void map() {
 			}
 		}
 	}
-	printf("Time for : %lu",getTimestamp()-time1);
 }
 
 void reduce() {
