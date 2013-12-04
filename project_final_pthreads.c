@@ -74,11 +74,11 @@ int main() {
 			calculateLimits();
 			//printf("59\n");
 			if(level<5) {
-				for(j=0;j<8;j++) {
+				for(j=0;j<NUM_OF_THREADS;j++) {
 					threadId[j]=j;
 					pthread_create(&threads[j], NULL, map, &threadId[j]);	
 				}
-				for(j=0;j<8;j++) 
+				for(j=0;j<NUM_OF_THREADS;j++) 
 					pthread_join(threads[j], NULL);
 			}
 			else
@@ -107,7 +107,7 @@ int main() {
 			box[i]->boxid,box[i]->level,box[i]->center[0],box[i]->center[1],
 			box[i]->center[2],box[i]->n);
 	}
-	printf("Total time: %lu\n",finishing-starting);
+	printf("Total time: %lu , number of boxes: %lu\n",finishing-starting,boxIdCounter);
 }
 
 void *map(void *arg) {
@@ -145,7 +145,7 @@ void reduce() {
 		childsId=box[parent]->child[j]-1;
 
 		if(box[childsId]->n==0) {
-			child[i].boxid=0;
+			//box[childsId]->boxid=0;
 			printf("");
 		}
 		

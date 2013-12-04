@@ -1,3 +1,22 @@
+=====================================================
+FINAL TESTS
+=====================================================
+openmp 
+2^20 	Total time: 9708  		number of boxes: 314593
+2^21 	Total time: 22045 		number of boxes: 580913
+2^22 	Total time: 44714 , 	number of boxes: 1260889
+2^23 	Total time: 93904 , 	number of boxes: 2322937
+2^24    Total time: 192808 , 	number of boxes: 5042753
+
+pthreads
+2^20 	Total time: 5225 , 		number of boxes: 314593		level: 8
+2^21    Total time: 10515 , 	number of boxes: 580913		level: 10
+2^22   	Total time: 21940 , 	number of boxes: 1260889	level: 10
+2^23 	Total time: 44842 , 	number of boxes: 2322937	level: 11
+2^24 	Total time: 93917 , 	number of boxes: 5042753 	level: 11
+
+
+
 map_reduce_v2 serial
 	
 	for 5M points: 15.047 sec
@@ -45,9 +64,6 @@ Time for lvl 9: 13315
 Time for lvl 10: 5691
 
 
-
-
-
 =====================================================
 OLDER TESTS
 =====================================================
@@ -60,10 +76,3 @@ para
 	for 50  000 points:   3.731 sec , last box: 14337
 	for 100 000 points:  15.036 sec
 	for 300 000 points: 138.650 sec
-
-openmp 
-2^20 	Total time: 9708  		number of boxes: 314593
-2^21 	Total time: 22045 		number of boxes: 580913
-2^22 	Total time: 44714 , 	number of boxes: 1260889
-2^23 	Total time: 93904 , 	number of boxes: 2322937
-2^24    Total time: 192808 , 	number of boxes: 5042753

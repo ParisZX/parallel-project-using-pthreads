@@ -139,7 +139,7 @@ void reduce() {
 		childsId=box[parent]->child[i]-1;
 
 		if(box[childsId]->n==0) {
-			//child[i].boxid=0;
+			box[childsId]->boxid=0;
 			printf("");
 		}
 		if(box[childsId]->n<=20) {
